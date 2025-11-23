@@ -247,21 +247,33 @@ resource "null_resource" "docker_build_push" {
   }
 
   provisioner "local-exec" {
+    working_dir = "${path.module}/../backend"  # backend 폴더로 이동
     command = <<-EOT
+      set -e  # 에러 발생 시 즉시 중단
+      
       echo "=== Docker 이미지 빌드 & ECR 푸시 시작 ==="
+      echo "현재 디렉토리: $(pwd)"
+      
+      # Docker 실행 확인
+      if ! docker ps > /dev/null 2>&1; then
+        echo "❌ Docker가 실행 중이지 않습니다! Docker Desktop을 시작하세요."
+        exit 1
+      fi
       
       # ECR 로그인
+      echo "ECR 로그인 중..."
       aws ecr get-login-password --region ap-northeast-2 | \
         docker login --username AWS --password-stdin ${aws_ecr_repository.app.repository_url}
       
       # Docker 이미지 빌드
-      cd ../backend
+      echo "Docker 이미지 빌드 중..."
       docker build -t ${aws_ecr_repository.app.repository_url}:latest .
       
       # ECR에 푸시
+      echo "ECR에 푸시 중..."
       docker push ${aws_ecr_repository.app.repository_url}:latest
       
-      echo "=== Docker 이미지 푸시 완료! ==="
+      echo "✅ Docker 이미지 푸시 완료!"
     EOT
   }
 }
