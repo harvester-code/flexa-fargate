@@ -265,9 +265,9 @@ resource "null_resource" "docker_build_push" {
       aws ecr get-login-password --region ap-northeast-2 | \
         docker login --username AWS --password-stdin ${aws_ecr_repository.app.repository_url}
       
-      # Docker 이미지 빌드
+      # Docker 이미지 빌드 (linux/amd64 플랫폼으로!)
       echo "Docker 이미지 빌드 중..."
-      docker build -t ${aws_ecr_repository.app.repository_url}:latest .
+      docker build --platform linux/amd64 -t ${aws_ecr_repository.app.repository_url}:latest .
       
       # ECR에 푸시
       echo "ECR에 푸시 중..."
