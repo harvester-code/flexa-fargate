@@ -232,6 +232,69 @@ resource "aws_ecs_service" "app" {
 }
 
 # ============================================================
+# 9. Docker 이미지 빌드 & ECR 푸시 (자동화!)
+# ============================================================
+# terraform apply 실행 시 자동으로 Docker 이미지를 빌드하고 ECR에 푸시
+resource "null_resource" "docker_build_push" {
+  # ECR이 생성된 후에 실행
+  depends_on = [aws_ecr_repository.app]
+
+  # ECR URL이 변경되거나 backend 코드가 변경되면 다시 실행
+  triggers = {
+    ecr_url = aws_ecr_repository.app.repository_url
+    # backend 코드가 변경되면 timestamp로 감지
+    always_run = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "=== Docker 이미지 빌드 & ECR 푸시 시작 ==="
+      
+      # ECR 로그인
+      aws ecr get-login-password --region ap-northeast-2 | \
+        docker login --username AWS --password-stdin ${aws_ecr_repository.app.repository_url}
+      
+      # Docker 이미지 빌드
+      cd ../backend
+      docker build -t ${aws_ecr_repository.app.repository_url}:latest .
+      
+      # ECR에 푸시
+      docker push ${aws_ecr_repository.app.repository_url}:latest
+      
+      echo "=== Docker 이미지 푸시 완료! ==="
+    EOT
+  }
+}
+
+# ============================================================
+# 10. ECS Service가 새 이미지로 재배포되도록 트리거
+# ============================================================
+# Docker 이미지가 푸시된 후 ECS Service 재배포
+resource "null_resource" "ecs_force_deploy" {
+  depends_on = [
+    aws_ecs_service.app,
+    null_resource.docker_build_push
+  ]
+
+  triggers = {
+    # Docker 이미지가 푸시될 때마다 실행
+    docker_build = null_resource.docker_build_push.id
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "=== ECS Service 재배포 시작 ==="
+      aws ecs update-service \
+        --cluster ${aws_ecs_cluster.main.name} \
+        --service ${aws_ecs_service.app.name} \
+        --force-new-deployment \
+        --region ap-northeast-2
+      echo "=== ECS Service 재배포 완료! ==="
+    EOT
+  }
+}
+
+# ============================================================
 # 전체 흐름 요약
 # ============================================================
 # 1. ECR: Docker 이미지 저장소
@@ -242,7 +305,10 @@ resource "aws_ecs_service" "app" {
 # 6. ALB: 트래픽 분산 + 헬스체크
 # 7. Task Definition: 컨테이너 설정 (이미지, CPU, 메모리)
 # 8. ECS Service: 실제 컨테이너 실행
+# 9. Docker Build/Push: 자동으로 이미지 빌드 & ECR 푸시
+# 10. ECS Force Deploy: 자동으로 새 이미지로 재배포
 #
+# terraform apply 한 번으로 모든 것이 자동 실행됨!
 # 인터넷 → ALB (80) → ECS Task (8000) → FastAPI
 # ============================================================
 

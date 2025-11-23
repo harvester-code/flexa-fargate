@@ -1,5 +1,7 @@
 # FastAPI + AWS Fargate 자동 배포
 
+**`terraform apply` 한 번에 모든 것 자동 배포!**
+
 가장 간단한 FastAPI + AWS Fargate + Terraform 배포 (uv 사용)
 
 ## 📁 폴더 구조
@@ -65,70 +67,15 @@ git push -u origin main
 
 **전부 다 올라갑니다!**
 
-### 3단계: AWS 연결 확인
+**⚠️ 중요: 이제 바로 GitHub Secrets 설정하기!**
 
-```bash
-# AWS 연결 확인
-aws sts get-caller-identity
-```
+### 2-1단계: GitHub Actions Secrets 설정 (필수!)
 
-연결 안 되어 있으면:
+**왜 지금 설정해야 하나?**
 
-```bash
-aws configure
-```
-
-### 4단계: AWS 배포
-
-```bash
-cd terraform
-terraform init
-terraform apply
-```
-
-끝! ECR, ECS, ALB 전부 자동 생성됨.
-
-**배포 시간: 약 5~7분** (ALB 생성에 시간 소요)
-
-### 5단계: 최초 이미지 푸시 (중요!)
-
-Fargate는 초기 이미지가 필요합니다:
-
-```bash
-# ECR URL 확인
-cd terraform
-terraform output ecr_repository_url
-
-# ECR 로그인
-aws ecr get-login-password --region ap-northeast-2 | \
-  docker login --username AWS --password-stdin <ECR_URL>
-
-# 이미지 빌드 & 푸시
-cd ../backend
-docker build -t <ECR_URL>:latest .
-docker push <ECR_URL>:latest
-
-# ECS 서비스 업데이트
-aws ecs update-service \
-  --cluster fastapi-cluster \
-  --service fastapi-service \
-  --force-new-deployment \
-  --region ap-northeast-2
-```
-
-### 6단계: URL 확인
-
-```bash
-cd terraform
-terraform output alb_dns_name
-```
-
-→ http://fastapi-alb-xxxxx.ap-northeast-2.elb.amazonaws.com
-
-### 7단계: GitHub Actions Secrets 설정
-
-**왜 필요한가?**
-GitHub Actions가 AWS에 자동 배포하려면 AWS 자격증명이 필요합니다.
+- Terraform으로 인프라 배포 후 git push하면 자동 배포가 시작됩니다
+- 그러려면 GitHub Actions가 AWS에 접근할 수 있어야 합니다
+- **지금 설정 안 하면 나중에 git push 시 배포 실패합니다!**
 
 **설정 방법:**
 
@@ -160,12 +107,60 @@ GitHub Actions가 AWS에 자동 배포하려면 AWS 자격증명이 필요합니
 **AWS Key는 어디서?**
 
 ```bash
-# AWS 콘솔 → IAM → Users → 본인 계정 → Security credentials → Access keys
-# 또는 터미널에서:
+# 터미널에서 확인:
 cat ~/.aws/credentials
+
+# 또는 AWS 콘솔:
+# IAM → Users → 본인 계정 → Security credentials → Access keys
 ```
 
-**완료!** `git push`하면 GitHub Actions가 AWS에 자동 배포합니다.
+**완료!** 이제 `terraform apply` 후 `git push`하면 자동 배포됩니다! ✅
+
+### 3단계: AWS 연결 확인
+
+```bash
+# AWS 연결 확인
+aws sts get-caller-identity
+```
+
+연결 안 되어 있으면:
+
+```bash
+aws configure
+```
+
+### 4단계: AWS 배포 (한 번에 끝!)
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+**끝!** 이 명령어로 모든 것이 자동으로 실행됩니다:
+
+✅ ECR, ECS, ALB 생성
+✅ Docker 이미지 자동 빌드
+✅ ECR에 자동 푸시
+✅ ECS 서비스 자동 시작
+
+**배포 시간: 약 7~10분** (ALB 생성 + Docker 빌드)
+
+### 5단계: URL 확인
+
+```bash
+cd terraform
+terraform output alb_dns_name
+```
+
+→ http://fastapi-alb-xxxxx.ap-northeast-2.elb.amazonaws.com
+
+**접속 확인:**
+
+```bash
+curl http://fastapi-alb-xxxxx.ap-northeast-2.elb.amazonaws.com/
+# {"message":"Hello from Fargate!"}
+```
 
 ## ⚡ 이후 사용
 
@@ -211,8 +206,10 @@ ALB: $16/월
 
 ## 📝 주요 특징
 
+- ✅ **`terraform apply` 한 번에 모든 것 자동 배포!** ⭐
 - ✅ 서울 리전 사용
 - ✅ 기본 VPC 사용 (간단)
+- ✅ Docker 이미지 자동 빌드 & 푸시
 - ✅ ALB로 트래픽 분산
 - ✅ 무중단 배포
 - ✅ CloudWatch 로그 자동 저장
