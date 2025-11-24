@@ -1,3 +1,13 @@
-# 변수 없음 - 모든 설정이 main.tf에 하드코딩됨 (간단하게!)
+variable "supabase_project_url" {
+  description = "Supabase Project URL"
+  type        = string
+  sensitive   = true
+}
+
+variable "supabase_public_key" {
+  description = "Supabase Public Anon Key"
+  type        = string
+  sensitive   = true
+}
 
 

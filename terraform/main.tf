@@ -74,12 +74,52 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Parameter Store 읽기 권한 추가
+resource "aws_iam_role_policy" "parameter_store_access" {
+  name = "parameter-store-access"
+  role = aws_iam_role.ecs_task_execution_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameters",
+        "ssm:GetParameter"
+      ]
+      Resource = "arn:aws:ssm:ap-northeast-2:*:parameter/flexa/*"
+    }]
+  })
+}
+
 # ============================================================
 # 4. CloudWatch 로그 그룹 (컨테이너 로그 저장)
 # ============================================================
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/fastapi-fargate"
   retention_in_days = 7  # 로그 7일 보관
+}
+
+# ============================================================
+# 4-1. Parameter Store (환경변수 관리)
+# ============================================================
+# Supabase 설정을 Parameter Store에 저장
+# 실제 값은 terraform apply 후 AWS CLI로 수동 업데이트
+
+resource "aws_ssm_parameter" "supabase_url" {
+  name  = "/flexa/supabase/url"
+  type  = "String"
+  value = var.supabase_project_url  # 변수에서 가져옴!
+  
+  description = "Supabase Project URL"
+}
+
+resource "aws_ssm_parameter" "supabase_public_key" {
+  name  = "/flexa/supabase/public_key"
+  type  = "SecureString"  # 암호화됨!
+  value = var.supabase_public_key  # 변수에서 가져옴!
+  
+  description = "Supabase Public Anon Key (Encrypted)"
 }
 
 # ============================================================
@@ -191,6 +231,18 @@ resource "aws_ecs_task_definition" "app" {
       containerPort = 8000
       protocol      = "tcp"
     }]
+
+    # Parameter Store에서 환경변수 가져오기 (암호화된 값)
+    secrets = [
+      {
+        name      = "SUPABASE_PROJECT_URL"
+        valueFrom = aws_ssm_parameter.supabase_url.arn
+      },
+      {
+        name      = "SUPABASE_PUBLIC_KEY"
+        valueFrom = aws_ssm_parameter.supabase_public_key.arn
+      }
+    ]
 
     logConfiguration = {
       logDriver = "awslogs"

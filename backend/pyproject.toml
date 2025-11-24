@@ -5,6 +5,8 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi==0.104.1",
     "uvicorn[standard]==0.24.0",
+    "supabase>=2.15.1",
+    "pydantic>=2.12.0",
 ]
 
 
